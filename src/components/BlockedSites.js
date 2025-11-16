@@ -14,8 +14,10 @@ const categories = [
 
 const BlockedSites = ({ onLogout }) => {
   const [sites, setSites] = useState([]);
+  const [newSite, setNewSite] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+
   const [category, setCategory] = useState(categories[0]);
   const [aiSites, setAiSites] = useState([]);
   const [aiLoading, setAiLoading] = useState(false);
@@ -34,6 +36,32 @@ const BlockedSites = ({ onLogout }) => {
     }
   };
 
+  // Handle manual add
+  const handleAddSite = async (e) => {
+    e.preventDefault();
+    if (!newSite.trim()) return;
+
+    setLoading(true);
+    try {
+      await blockService.addBlockedSite(newSite.trim());
+      setNewSite("");
+      await loadBlockedSites();
+    } catch {
+      setError("Failed to add site");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleRemoveSite = async (domain) => {
+    try {
+      await blockService.removeBlockedSite(domain);
+      await loadBlockedSites();
+    } catch {
+      setError("Failed to remove site");
+    }
+  };
+
   const handleCategoryChange = async (e) => {
     const selected = e.target.value;
     setCategory(selected);
@@ -46,8 +74,8 @@ const BlockedSites = ({ onLogout }) => {
       const res = await axios.get(
         `https://web-blocker.onrender.com/suggest/blocked-sites?category=${category}`
       );
-      setAiSites(res.data); // store AI suggestions in state
-      if (res.data.length > 0) setShowModal(true); // show modal if suggestions exist
+      setAiSites(res.data);
+      if (res.data.length > 0) setShowModal(true);
     } catch (err) {
       console.error("Failed to fetch AI suggested sites", err);
       setError("Failed to fetch AI suggested sites");
@@ -68,8 +96,8 @@ const BlockedSites = ({ onLogout }) => {
         }
       }
       await loadBlockedSites();
-      setAiSites([]); // clear AI suggestions after adding
-    } catch (err) {
+      setAiSites([]);
+    } catch {
       setError("Failed to block AI suggested sites");
     } finally {
       setAiLoading(false);
@@ -93,10 +121,41 @@ const BlockedSites = ({ onLogout }) => {
       </nav>
 
       <div className="container py-5">
-        {/* Category Selector */}
         <div className="row mb-5">
-          <div className="col-lg-4">
-            <div className="card border-0 shadow-sm mb-4">
+          {/* Manual Add */}
+          <div className="col-lg-8 mb-4">
+            <div className="card border-0 shadow-sm">
+              <div className="card-body p-4">
+                <h5 className="card-title mb-4">Add New Site to Block</h5>
+                <form onSubmit={handleAddSite}>
+                  <div className="row g-3">
+                    <div className="col-md-8">
+                      <input
+                        type="text"
+                        className="form-control"
+                        placeholder="Enter domain (e.g., facebook.com)"
+                        value={newSite}
+                        onChange={(e) => setNewSite(e.target.value)}
+                      />
+                    </div>
+                    <div className="col-md-4">
+                      <button
+                        type="submit"
+                        className="btn btn-primary w-100"
+                        disabled={loading || !newSite.trim()}
+                      >
+                        {loading ? "Adding..." : "Add Site"}
+                      </button>
+                    </div>
+                  </div>
+                </form>
+              </div>
+            </div>
+          </div>
+
+          {/* Category AI Suggestions */}
+          <div className="col-lg-4 mb-4">
+            <div className="card border-0 shadow-sm">
               <div className="card-body p-4">
                 <h5 className="card-title mb-4 text-primary">Block Sites by Category</h5>
                 <select
@@ -114,7 +173,7 @@ const BlockedSites = ({ onLogout }) => {
           </div>
         </div>
 
-        {/* Blocked Websites */}
+        {/* Blocked Sites List */}
         <div className="row mb-5">
           <div className="col-lg-8">
             <div className="card border-0 shadow-sm">
@@ -133,14 +192,7 @@ const BlockedSites = ({ onLogout }) => {
                         <span className="fw-bold">{site}</span>
                         <button
                           className="btn btn-outline-danger btn-sm"
-                          onClick={async () => {
-                            try {
-                              await blockService.removeBlockedSite(site);
-                              await loadBlockedSites();
-                            } catch {
-                              setError("Failed to remove site");
-                            }
-                          }}
+                          onClick={() => handleRemoveSite(site)}
                         >
                           Remove
                         </button>
@@ -154,18 +206,14 @@ const BlockedSites = ({ onLogout }) => {
         </div>
       </div>
 
-      {/* Modal */}
+      {/* Modal for AI Suggestions */}
       {showModal && (
         <div className="modal fade show" style={{ display: "block" }}>
           <div className="modal-dialog">
             <div className="modal-content">
               <div className="modal-header">
                 <h5 className="modal-title">Confirm Blocking</h5>
-                <button
-                  type="button"
-                  className="btn-close"
-                  onClick={() => setShowModal(false)}
-                ></button>
+                <button type="button" className="btn-close" onClick={() => setShowModal(false)}></button>
               </div>
               <div className="modal-body">
                 <p>
@@ -181,16 +229,8 @@ const BlockedSites = ({ onLogout }) => {
                 </ul>
               </div>
               <div className="modal-footer">
-                <button
-                  type="button"
-                  className="btn btn-secondary"
-                  onClick={() => setShowModal(false)}
-                >
-                  Cancel
-                </button>
-                <button type="button" className="btn btn-primary" onClick={handleBlockAll}>
-                  Block All
-                </button>
+                <button className="btn btn-secondary" onClick={() => setShowModal(false)}>Cancel</button>
+                <button className="btn btn-primary" onClick={handleBlockAll}>Block All</button>
               </div>
             </div>
           </div>
