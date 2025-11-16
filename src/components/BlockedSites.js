@@ -7,7 +7,7 @@ const categories = [
   "social_media",
   "streaming",
   "gambling",
-  "ai_tools",
+  "generative_ai_tools",
   "gaming",
   "shopping",
 ];
