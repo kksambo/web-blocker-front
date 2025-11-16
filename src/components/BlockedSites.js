@@ -3,166 +3,144 @@ import { Link } from "react-router-dom";
 import { blockService } from "../services/api";
 import axios from "axios";
 
+const categories = [
+  "social_media",
+  "streaming",
+  "gambling",
+  "ai_tools",
+  "gaming",
+  "shopping",
+];
+
 const BlockedSites = ({ onLogout }) => {
   const [sites, setSites] = useState([]);
-  const [newSite, setNewSite] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [category, setCategory] = useState(categories[0]);
   const [aiSites, setAiSites] = useState([]);
   const [aiLoading, setAiLoading] = useState(false);
+  const [showModal, setShowModal] = useState(false);
 
   useEffect(() => {
     loadBlockedSites();
-    fetchAiSuggestedSites();
   }, []);
 
   const loadBlockedSites = async () => {
     try {
-      const data = await blockService.getBlockedSites(); // returns array of strings
-      setSites(data); // store as array of strings
+      const data = await blockService.getBlockedSites();
+      setSites(data);
     } catch (err) {
       setError("Failed to load blocked sites");
     }
   };
 
-  const fetchAiSuggestedSites = async () => {
+  const handleCategoryChange = async (e) => {
+    const selected = e.target.value;
+    setCategory(selected);
+    await fetchAiSuggestedSites(selected);
+  };
+
+  const fetchAiSuggestedSites = async (category) => {
     setAiLoading(true);
     try {
       const res = await axios.get(
-        "https://web-blocker.onrender.com/suggest/blocked-sites"
+        `https://web-blocker.onrender.com/suggest/blocked-sites?category=${category}`
       );
-      setAiSites(res.data);
+      setAiSites(res.data); // store AI suggestions in state
+      if (res.data.length > 0) setShowModal(true); // show modal if suggestions exist
     } catch (err) {
       console.error("Failed to fetch AI suggested sites", err);
+      setError("Failed to fetch AI suggested sites");
     } finally {
       setAiLoading(false);
     }
   };
 
-  const handleAddSite = async (e) => {
-    e.preventDefault();
-    if (!newSite.trim()) return;
-
-    setLoading(true);
+  const handleBlockAll = async () => {
+    setShowModal(false);
+    setAiLoading(true);
     try {
-      await blockService.addBlockedSite(newSite.trim());
-      setNewSite("");
+      for (const site of aiSites) {
+        try {
+          await blockService.addBlockedSite(site.domain);
+        } catch {
+          console.warn("Failed to add site:", site.domain);
+        }
+      }
       await loadBlockedSites();
+      setAiSites([]); // clear AI suggestions after adding
     } catch (err) {
-      setError("Failed to add site");
+      setError("Failed to block AI suggested sites");
     } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleRemoveSite = async (domain) => {
-    try {
-      await axios.delete(
-        `https://web-blocker.onrender.com/blocked-sites/${domain}`
-      );
-      await loadBlockedSites();
-    } catch (err) {
-      setError("Failed to remove site");
+      setAiLoading(false);
     }
   };
 
   return (
     <div className="min-vh-100 bg-light">
+      {/* Navbar */}
       <nav className="navbar navbar-expand-lg navbar-dark bg-primary shadow">
         <div className="container">
           <span className="navbar-brand fw-bold">Website Blocker</span>
           <div className="navbar-nav ms-auto">
-            <Link className="nav-link text-white" to="/dashboard">
-              Dashboard
-            </Link>
-            <Link className="nav-link text-white" to="/blocked-sites">
-              Block Sites
-            </Link>
-            <Link className="nav-link text-white" to="/logs">
-              Logs
-            </Link>
-            <Link className="nav-link text-white" to="/charts">
-              Analytics
-            </Link>
-            <button
-              className="btn btn-outline-light btn-sm ms-2"
-              onClick={onLogout}
-            >
-              Logout
-            </button>
+            <Link className="nav-link text-white" to="/dashboard">Dashboard</Link>
+            <Link className="nav-link text-white" to="/blocked-sites">Block Sites</Link>
+            <Link className="nav-link text-white" to="/logs">Logs</Link>
+            <Link className="nav-link text-white" to="/charts">Analytics</Link>
+            <button className="btn btn-outline-light btn-sm ms-2" onClick={onLogout}>Logout</button>
           </div>
         </div>
       </nav>
 
       <div className="container py-5">
+        {/* Category Selector */}
         <div className="row mb-5">
-          <div className="col-12">
-            <h1 className="display-5 fw-bold text-primary mb-2">
-              Blocked Sites
-            </h1>
-            <p className="lead text-muted">
-              Manage the list of websites you want to block
-            </p>
-          </div>
-        </div>
-
-        <div className="row mb-5">
-          <div className="col-lg-8">
-            <div className="card border-0 shadow-sm">
+          <div className="col-lg-4">
+            <div className="card border-0 shadow-sm mb-4">
               <div className="card-body p-4">
-                <h5 className="card-title mb-4">Add New Site to Block</h5>
-                <form onSubmit={handleAddSite}>
-                  <div className="row g-3">
-                    <div className="col-md-8">
-                      <input
-                        type="text"
-                        className="form-control"
-                        placeholder="Enter domain (e.g., facebook.com)"
-                        value={newSite}
-                        onChange={(e) => setNewSite(e.target.value)}
-                      />
-                    </div>
-                    <div className="col-md-4">
-                      <button
-                        type="submit"
-                        className="btn btn-primary w-100"
-                        disabled={loading || !newSite.trim()}
-                      >
-                        {loading ? "Adding..." : "Add Site"}
-                      </button>
-                    </div>
-                  </div>
-                </form>
+                <h5 className="card-title mb-4 text-primary">Block Sites by Category</h5>
+                <select
+                  className="form-select"
+                  value={category}
+                  onChange={handleCategoryChange}
+                >
+                  {categories.map((cat) => (
+                    <option key={cat} value={cat}>{cat.replace("_", " ")}</option>
+                  ))}
+                </select>
+                {aiLoading && <p className="text-muted mt-2">Processing AI suggestions...</p>}
               </div>
             </div>
           </div>
         </div>
 
+        {/* Blocked Websites */}
         <div className="row mb-5">
           <div className="col-lg-8">
             <div className="card border-0 shadow-sm">
               <div className="card-body p-4">
                 <h5 className="card-title mb-4">Blocked Websites</h5>
-
                 {error && <div className="alert alert-danger">{error}</div>}
 
                 {sites.length === 0 ? (
                   <div className="text-center py-4">
-                    <p className="text-muted">
-                      No sites blocked yet. Add some sites to get started.
-                    </p>
+                    <p className="text-muted">No sites blocked yet.</p>
                   </div>
                 ) : (
                   <div className="list-group">
                     {sites.map((site, index) => (
-                      <div
-                        key={index}
-                        className="list-group-item d-flex justify-content-between align-items-center"
-                      >
+                      <div key={index} className="list-group-item d-flex justify-content-between align-items-center">
                         <span className="fw-bold">{site}</span>
                         <button
                           className="btn btn-outline-danger btn-sm"
-                          onClick={() => handleRemoveSite(site)}
+                          onClick={async () => {
+                            try {
+                              await blockService.removeBlockedSite(site);
+                              await loadBlockedSites();
+                            } catch {
+                              setError("Failed to remove site");
+                            }
+                          }}
                         >
                           Remove
                         </button>
@@ -173,63 +151,52 @@ const BlockedSites = ({ onLogout }) => {
               </div>
             </div>
           </div>
+        </div>
+      </div>
 
-          <div className="col-lg-4">
-            <div className="card border-0 shadow-sm mb-4">
-              <div className="card-body p-4">
-                <h5 className="card-title mb-4 text-primary">
-                  AI Suggested Sites to Block
-                </h5>
-                {aiLoading ? (
-                  <p className="text-muted">Loading suggestions...</p>
-                ) : aiSites.length === 0 ? (
-                  <p className="text-muted">No AI suggestions available</p>
-                ) : (
-                  <ul className="list-group list-group-flush">
-                    {aiSites.map((site, idx) => (
-                      <li
-                        key={idx}
-                        className="list-group-item d-flex justify-content-between align-items-center"
-                      >
-                        <div>
-                          <span className="fw-bold">{site.domain}</span>
-                          <br />
-                          <small className="text-muted">{site.reason}</small>
-                        </div>
-                        <button
-                          className="btn btn-outline-success btn-sm"
-                          onClick={async () => {
-                            try {
-                              await blockService.addBlockedSite(site.domain);
-                              await loadBlockedSites();
-                            } catch {
-                              setError("Failed to add AI suggested site");
-                            }
-                          }}
-                        >
-                          Add
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
-                )}
+      {/* Modal */}
+      {showModal && (
+        <div className="modal fade show" style={{ display: "block" }}>
+          <div className="modal-dialog">
+            <div className="modal-content">
+              <div className="modal-header">
+                <h5 className="modal-title">Confirm Blocking</h5>
+                <button
+                  type="button"
+                  className="btn-close"
+                  onClick={() => setShowModal(false)}
+                ></button>
               </div>
-            </div>
-
-            <div className="card border-0 shadow-sm">
-              <div className="card-body p-4">
-                <h6 className="card-title text-primary">Tips</h6>
-                <ul className="list-unstyled text-muted small">
-                  <li>• Use domain names only (e.g., youtube.com)</li>
-                  <li>• Subdomains are automatically blocked</li>
-                  <li>• You can add up to 100 sites</li>
-                  <li>• Changes take effect immediately</li>
+              <div className="modal-body">
+                <p>
+                  AI has suggested <strong>{aiSites.length}</strong> sites for the "{category.replace("_", " ")}" category.
+                  Do you want to block all of them?
+                </p>
+                <ul className="list-group">
+                  {aiSites.map((site, idx) => (
+                    <li key={idx} className="list-group-item">
+                      {site.domain} - <small>{site.reason}</small>
+                    </li>
+                  ))}
                 </ul>
+              </div>
+              <div className="modal-footer">
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={() => setShowModal(false)}
+                >
+                  Cancel
+                </button>
+                <button type="button" className="btn btn-primary" onClick={handleBlockAll}>
+                  Block All
+                </button>
               </div>
             </div>
           </div>
         </div>
-      </div>
+      )}
+      {showModal && <div className="modal-backdrop fade show"></div>}
     </div>
   );
 };
